@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Process Synchronization with Deadlock Detection</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            color: #222;
+        }
+
+        button,
+        input {
+            padding: 8px 12px;
+            font-size: 16px;
+            margin: 5px;
+        }
+
+        #counter {
+            font-size: 20px;
+            margin: 15px 0;
+        }
+
+        #log {
+            background: #eee;
+            border-radius: 5px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+
+        .process {
+            display: inline-block;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            background-color: #ddd;
+            transition: all 0.3s;
+        }
+
+        .running {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .waiting {
+            background-color: #ffc107;
+        }
+
+        .done {
+            background-color: #2196f3;
+            color: white;
+        }
+
+        .deadlocked {
+            background-color: #e53935;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1> Real-Time Process Synchronization Analyzer</h1>
+
+    <label> Number of Processes:
+        <input type="number" id="processCount" value="5" min="1" max="20">
+    </label>
+    <label>
+        Synchronized:
+        <input type="checkbox" id="syncToggle" checked>
+    </label>
+    <button onclick="startSimulation()"> Start Simulation</button>
+    <button onclick="resetSimulation()"> Reset</button>
+    <button onclick="downloadLog()"> Download Log</button>
+
+    <div id="counter"> <strong>Shared Counter:</strong> <span id="sharedValue">0</span></div>
+
+    <div><strong> Process States:</strong></div>
+    <div id="processContainer"></div>
+
+    <div> <strong>Event Log</strong></div>
+    <div id="log"></div>
+
+    <script>
+        let sharedCounter = 0;
+        let lock = false;
+        let lockWaitTime = 0;
+        let deadlockDetected = false;
+        const logArea = document.getElementById('log');
+        const counterDisplay = document.getElementById('sharedValue');
+        const processContainer = document.getElementById('processContainer');
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.innerHTML += `[${timestamp}] ${message}<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function updateProcessState(id, state) {
+            const processDiv = document.getElementById(`p${id}`);
+            processDiv.className = `process ${state}`;
+        }
+
+        function resetSimulation() {
+            sharedCounter = 0;
+            lock = false;
+            deadlockDetected = false;
+            lockWaitTime = 0;
+            counterDisplay.textContent = sharedCounter;
+            logArea.innerHTML = '';
+            processContainer.innerHTML = '';
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function simulateProcess(id, syncMode) {
+            updateProcessState(id, 'waiting');
+            log(`Process ${id} is waiting to enter critical section.`);
+
+            let waitStart = Date.now();
+
+            if (syncMode) {
+                while (lock) {
+                    await delay(100);
+                    lockWaitTime += 100;
+
+                    if (lockWaitTime >= 5000 && !deadlockDetected) {
+                        deadlockDetected = true;
+                        log(`Deadlock detected! Force releasing lock.`);
+                        lock = false;
+                    }
+                }
+                lock = true;
+                lockWaitTime = 0;
+            }
+
+            updateProcessState(id, 'running');
+            log(`Process ${id} entered critical section.`);
+
+            const oldVal = sharedCounter;
+            await delay(Math.floor(Math.random() * 1500) + 500);
+            sharedCounter += 1;
+            counterDisplay.textContent = sharedCounter;
+            log(`Process ${id} incremented counter from ${oldVal} to ${sharedCounter}`);
+
+            if (syncMode) lock = false;
+
+            updateProcessState(id, 'done');
+            log(`Process ${id} exited critical section.`);
+        }
+
+        async function startSimulation() {
+            resetSimulation();
+            const count = parseInt(document.getElementById('processCount').value);
+            const syncMode = document.getElementById('syncToggle').checked;
+
+            for (let i = 1; i <= count; i++) {
+                const div = document.createElement('div');
+                div.id = `p${i}`;
+                div.className = 'process waiting';
+                div.innerText = `P${i}`;
+                processContainer.appendChild(div);
+            }
+
+            log(syncMode ? " Synchronized mode ON" : " Synchronized mode OFF");
+            log(" Starting Simulation...");
+
+            const promises = [];
+            for (let i = 1; i <= count; i++) {
+                const p = simulateProcess(i, syncMode);
+                if (syncMode) {
+                    await p;
+                } else {
+                    promises.push(p);
+                }
+            }
+
+            if (!syncMode) {
+                await Promise.all(promises);
+            }
+
+            log(" Simulation Complete.");
+        }
+
+        function downloadLog() {
+            const logText = logArea.innerText;
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'process_log.txt';
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+
+</html> 
+
+
+
